@@ -1,7 +1,6 @@
 #!/bin/sh
-[[ -s $HOME/.nvm/nvm.sh ]] && source $HOME/.nvm/nvm.sh && nvm use 18
-npm install
+which nvm > /dev/null && nvm use 24
 npm ci
-npm run setheapsize
-npx grunt prod
-docker build --tag ghcr.io/sewera/cyberchef:latest .
+#npm run setheapsize
+npx run build
+podman build --tag ghcr.io/sewera/cyberchef:latest .
