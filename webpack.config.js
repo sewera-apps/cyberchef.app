@@ -1,8 +1,10 @@
 const webpack = require("webpack");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const CompressionPlugin = require("compression-webpack-plugin");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const { ModifySourcePlugin, ReplaceOperation } = require("modify-source-webpack-plugin");
 const path = require("path");
+const zlib = require("zlib");
 
 /**
  * Webpack configuration details for use with Grunt.
@@ -64,6 +66,21 @@ module.exports = {
         new MiniCssExtractPlugin({
             filename: "assets/[name].css"
         }),
+        new CompressionPlugin({
+            filename: "[path][base].gz",
+            algorithm: "gzip",
+            test: /\.(js|css|html)$/,
+        }),
+        new CompressionPlugin({
+            filename: "[path][base].br",
+            algorithm: "brotliCompress",
+            test: /\.(js|css|html)$/,
+            compressionOptions: {
+                params: {
+                    [zlib.constants.BROTLI_PARAM_QUALITY]: 11,
+                },
+            },
+        }),
         new CopyWebpackPlugin({
             patterns: [
                 {
@@ -71,8 +88,8 @@ module.exports = {
                     from: "tesseract/**/*",
                     to: "assets/"
                 }, {
-                    context: "node_modules/tesseract.js/",
-                    from: "dist/worker.min.js",
+                    context: "node_modules/tesseract.js/dist",
+                    from: "worker.min.js",
                     to: "assets/tesseract"
                 }, {
                     context: "node_modules/tesseract.js-core/",
@@ -103,17 +120,20 @@ module.exports = {
             jquery: "jquery/src/jquery",
         },
         fallback: {
-            "fs": false,
-            "child_process": false,
-            "net": false,
-            "tls": false,
-            "path": require.resolve("path/"),
+            "assert": require.resolve("assert/"),
             "buffer": require.resolve("buffer/"),
+            "child_process": false,
             "crypto": require.resolve("crypto-browserify"),
-            "stream": require.resolve("stream-browserify"),
-            "zlib": require.resolve("browserify-zlib"),
+            "events": require.resolve("events/"),
+            "fs": false,
+            "net": false,
+            "path": require.resolve("path/"),
             "process": false,
-            "vm": false
+            "stream": require.resolve("stream-browserify"),
+            "tls": false,
+            "url": require.resolve("url/"),
+            "vm": false,
+            "zlib": require.resolve("browserify-zlib")
         }
     },
     module: {
@@ -201,7 +221,7 @@ module.exports = {
             },
             { // Third party images are inlined
                 test: /\.(png|jpg|gif)$/,
-                exclude: /web\/static/,
+                include: /node_modules/,
                 type: "asset/inline",
             },
         ]

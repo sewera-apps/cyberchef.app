@@ -42,6 +42,14 @@ class App {
         this.progress      = 0;
         this.ingId         = 0;
 
+        // stateChangeId increments on every statechange dispatch; bakeStateId records
+        // the stateChangeId captured when the most recent bake started. autoBake uses
+        // these to decide whether the output is genuinely stale, so a debounced
+        // autoBake firing shortly after a manual bake doesn't clobber the bake's
+        // hideStaleIndicator with a redundant showStaleIndicator.
+        this.stateChangeId = 0;
+        this.bakeStateId   = -1;
+
         this.appLoaded     = false;
         this.workerLoaded  = false;
         this.waitersLoaded = false;
@@ -60,6 +68,7 @@ class App {
 
         this.initialiseSplitter();
         this.loadLocalStorage();
+        this.manager.options.applyPreferredColorScheme();
         this.populateOperationsList();
         this.manager.setup();
         this.manager.output.saveBombe();
@@ -96,8 +105,11 @@ class App {
             document.getElementById("loader-wrapper").remove();
             document.body.classList.remove("loaded");
 
-            // Bake initial input
-            this.manager.input.bakeAll();
+            // guard in case any of the operations in the loaded recipe have manualBake set
+            if (this.autoBake_) {
+                // Bake initial input
+                this.manager.input.bakeAll();
+            }
         }.bind(this), 1000);
 
         // Clear the loading message interval
@@ -135,6 +147,9 @@ class App {
     bake(step=false) {
         if (this.baking) return;
 
+        // Record which state version this bake is covering.
+        this.bakeStateId = this.stateChangeId;
+
         // Reset attemptHighlight flag
         this.options.attemptHighlight = true;
 
@@ -165,7 +180,10 @@ class App {
                 nums: [this.manager.tabs.getActiveTab("input")],
                 step: false
             });
-        } else {
+        } else if (this.bakeStateId < this.stateChangeId) {
+            // Only show stale-indicator if the most recent bake didn't cover the
+            // current state. Without this guard, a debounced autoBake firing after
+            // a manual bake completed would re-show the indicator on fresh output.
             this.manager.controls.showStaleIndicator();
         }
     }
@@ -536,6 +554,8 @@ class App {
         // Read in theme from URI params
         if (this.uriParams.theme) {
             this.manager.options.changeTheme(Utils.escapeHtml(this.uriParams.theme));
+        } else {
+            this.manager.options.applyPreferredColorScheme();
         }
 
         window.dispatchEvent(this.manager.statechange);
@@ -647,7 +667,7 @@ class App {
 
         // const compareURL = `https://github.com/gchq/CyberChef/compare/v${prev.join(".")}...v${PKG_VERSION}`;
 
-        let compileInfo = `<a href='https://github.com/gchq/CyberChef/blob/master/CHANGELOG.md'>Last build: ${timeSinceCompile.substr(0, 1).toUpperCase() + timeSinceCompile.substr(1)} ago</a>`;
+        let compileInfo = `<a href='https://github.com/gchq/CyberChef/blob/master/CHANGELOG.md'>Last build: ${timeSinceCompile.substring(0, 1).toUpperCase() + timeSinceCompile.substring(1)} ago</a>`;
 
         if (window.compileMessage !== "") {
             compileInfo += " - " + window.compileMessage;
@@ -765,6 +785,10 @@ class App {
      * @param {event} e
      */
     stateChange(e) {
+        // Bump the state-change counter synchronously so a manual bake invoked between
+        // here and the debounced autoBake firing can record it via bakeStateId.
+        this.stateChangeId++;
+
         debounce(function() {
             this.progress = 0;
             this.autoBake();
